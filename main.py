@@ -7,6 +7,7 @@ import subprocess
 import sys
 import os
 import typer
+import numpy as np
 from typing_extensions import Annotated
 
 
@@ -64,9 +65,9 @@ def print_connection_info(ip: str, port: int):
     print()
     print("╔════════════════════════════════════════════════════════════╗")
     print("║                                                            ║")
-    print("║       Isaac Sim is Ready!                                 ║")
+    print("║       Isaac Sim is Ready!                                  ║")
     print("║                                                            ║")
-    print("║  Connect using Isaac Sim WebRTC Streaming Client:         ║")
+    print("║  Connect using Isaac Sim WebRTC Streaming Client:          ║")
     print("║                                                            ║")
     print(f"║  IP Address:  {ip:<44} ║")
     print(f"║  Port:        {port:<44} ║")
@@ -145,14 +146,60 @@ def main(
 
     kit.update()
 
+    # ========================================================================
+    # ROBOT SETUP - TOY EXAMPLE
+    # ========================================================================
+    from isaacsim.core.api import World
+    from isaacsim.core.utils.stage import add_reference_to_stage
+    from isaacsim.storage.native import get_assets_root_path
+    from isaacsim.core.api.objects import DynamicCuboid
+
+    print("Setting up robot simulation...")
+
+    # Create world
+    world = World(stage_units_in_meters=1.0)
+    world.scene.add_default_ground_plane()
+
+    # Add Franka robot
+    assets_root_path = get_assets_root_path()
+    franka_asset_path = (
+        assets_root_path + "/Isaac/Robots/FrankaRobotics/FrankaPanda/franka.usd"
+    )
+    add_reference_to_stage(usd_path=franka_asset_path, prim_path="/World/Franka")
+
+    # Add a cube for the robot to "look at"
+    cube = world.scene.add(
+        DynamicCuboid(
+            prim_path="/World/Cube",
+            name="target_cube",
+            position=np.array([0.5, 0.0, 0.3]),
+            scale=np.array([0.05, 0.05, 0.05]),
+            color=np.array([1.0, 0.0, 0.0]),  # Red cube
+        )
+    )
+
+    # Reset world to initialize physics
+    world.reset()
+
+    print("Robot setup complete!")
+    print("  - Franka Panda robot added at /World/Franka")
+    print("  - Red cube added at [0.5, 0.0, 0.3]")
+
     # Print connection info
     print_connection_info(endpoint_ip, port)
 
     # Run until closed
     try:
         while kit._app.is_running() and not kit.is_exiting():
-            # Run in realtime mode, we don't specify the step size
-            kit.update()
+            # Step the world (this calls kit.update internally)
+            world.step(render=True)
+
+            # Your custom code can go here:
+            # - Get robot observations
+            # - Apply actions
+            # - Run control logic
+            # etc.
+
     except KeyboardInterrupt:
         print("\nShutting down Isaac Sim...")
     finally:
